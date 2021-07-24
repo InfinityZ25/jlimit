@@ -32,8 +32,9 @@ public class JLimitMod {
     private JsonFile jsonFile;
     // Thread to run the logic on.
     private static Thread saveThread;
-    // Saving interval in seconds
-    private int interval = 5;
+    // Saving and sleep interval in milliseconds
+    private int interval = 5000;
+    private int sleepInterval = 1000;
     // Current tick, ignore
     private static int tick = 0;
     // Time in seconds to kick players
@@ -59,7 +60,8 @@ public class JLimitMod {
             // Create a new thread to run the logic and save the data periodically
             saveThread = new Thread(() -> {
                 while (true) {
-                    tick++;
+                    // Add the millisecond that have passed since the last sleep
+                    tick += sleepInterval;
 
                     // Run all our game logic
                     timeLoop();
@@ -67,10 +69,12 @@ public class JLimitMod {
                     // Save data every that often
                     if (tick % interval == 0) {
                         saveInfoToFlatFile();
+                        // Reset tick
+                        tick = 0;
                     }
-                    // Make the thread sleep every x seconds
+                    // Make the thread sleep every x milliseconds
                     try {
-                        TimeUnit.SECONDS.sleep(1);
+                        TimeUnit.MILLISECONDS.sleep(sleepInterval);
                     } catch (InterruptedException e) {
                         e.printStackTrace();
                     }
