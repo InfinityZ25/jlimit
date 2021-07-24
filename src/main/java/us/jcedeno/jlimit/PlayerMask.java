@@ -1,15 +1,11 @@
 package us.jcedeno.jlimit;
 
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
-
 import lombok.AllArgsConstructor;
 import lombok.Data;
 
 @AllArgsConstructor(staticName = "create")
 @Data
 public class PlayerMask {
-    private static final Logger LOGGER = LogManager.getLogger();
     long timePlayedToday;
     long totalTimePlayed;
     long cannotPlayUntil;

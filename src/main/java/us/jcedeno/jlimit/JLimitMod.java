@@ -11,6 +11,7 @@ import com.google.gson.reflect.TypeToken;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
+import net.minecraft.entity.player.ServerPlayerEntity;
 import net.minecraft.util.text.StringTextComponent;
 import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.event.entity.player.PlayerEvent;
@@ -43,20 +44,22 @@ public class JLimitMod {
         MinecraftForge.EVENT_BUS.register(this);
     }
 
+    /** Events starts */
+
     @SubscribeEvent
     public void onStart(FMLServerStartingEvent event) {
         try {
             this.jsonFile = new JsonFile("jlimit.json");
             // Load back the data if it exists
             if (jsonFile.getJsonObject() != null) {
+                // Weird trick to process the json hashmap back into the ram copy
                 playerMasks = new Gson().fromJson(jsonFile.getJsonObject(), new TypeToken<HashMap<UUID, PlayerMask>>() {
                 }.getType());
             }
+            // Create a new thread to run the logic and save the data periodically
             saveThread = new Thread(() -> {
                 while (true) {
                     tick++;
-
-                    LOGGER.info("Thread looped");
 
                     // Run all our game logic
                     timeLoop();
@@ -76,8 +79,7 @@ public class JLimitMod {
             });
 
             // Start the save thread.
-
-            LOGGER.info("Thread STARTED");
+            LOGGER.debug("JLimit processing thread has been started");
             saveThread.start();
 
         } catch (Exception e) {
@@ -85,10 +87,8 @@ public class JLimitMod {
         }
     }
 
-    /** Events starts */
-
     @SubscribeEvent
-    public void onStopping(FMLServerStoppingEvent e) {
+    public void onStopping(FMLServerStoppingEvent event) {
         try {
             // Join the thread to halt it
             saveThread.join();
@@ -96,8 +96,8 @@ public class JLimitMod {
             saveInfoToFlatFile();
             // Set thread to null if it's a reload or sometthing weird
             saveThread = null;
-        } catch (InterruptedException e1) {
-            e1.printStackTrace();
+        } catch (InterruptedException e) {
+            e.printStackTrace();
         }
 
     }
@@ -109,12 +109,9 @@ public class JLimitMod {
         var mask = playerMasks.putIfAbsent(player.getUUID(), PlayerMask.init());
 
         if (mask != null && mask.getCannotPlayUntil() > System.currentTimeMillis()) {
-            // This is probably not the right way to do this. But it works.
-            ServerLifecycleHooks.getCurrentServer().getPlayerList().getPlayer(player.getUUID()).connection
-                    .disconnect(new StringTextComponent("You can't play until " + mask.getCannotPlayUntil()));
+            // Use the kickplayer method
+            this.kickPlayer(player.getUUID(), "You can't play until " + mask.getCannotPlayUntil());
         }
-
-        LOGGER.info(player.getUUID() + " " + player.getName().getString() + " joined the server");
     }
 
     @SubscribeEvent
@@ -148,11 +145,10 @@ public class JLimitMod {
      * Method that runs the logic of the game.
      */
     public void timeLoop() {
-        LOGGER.info("Time Loop called");
         // Add time to all online masks
-        ServerLifecycleHooks.getCurrentServer().getPlayerList().getPlayers().stream().forEach(players -> {
+        ServerLifecycleHooks.getCurrentServer().getPlayerList().getPlayers().stream().forEach(player -> {
             // Obtain the player's mask
-            var mask = playerMasks.get(players.getUUID());
+            var mask = playerMasks.get(player.getUUID());
             // If null return
             if (mask == null)
                 return;
@@ -161,14 +157,35 @@ public class JLimitMod {
             // If the player has played for more than the time limit, kick the player.
             if (mask.getTimePlayedToday() > TIME_LIMIT) {
                 // Kick them
-                players.connection.disconnect(
-                        new StringTextComponent("You have played for more than " + TIME_LIMIT + " seconds!"));
+                kickPlayer(player, "You have played for more than " + TIME_LIMIT + " seconds!");
                 // Set their cannot play until time to now + 24 hours
                 mask.setCannotPlayUntil(System.currentTimeMillis() + TimeUnit.DAYS.toMillis(1));
                 mask.resetTime();
             }
 
         });
+    }
+
+    /**
+     * Method to kick players manually using their UUID.
+     * 
+     * @param uuid   UUID of the player to be kicked
+     * @param reason Reason for the kick.
+     */
+    private void kickPlayer(UUID uuid, String reason) {
+        var player = ServerLifecycleHooks.getCurrentServer().getPlayerList().getPlayer(uuid);
+        kickPlayer(player, reason);
+    }
+
+    /**
+     * Method to kick players manually using their ServerPlayerEntity
+     * representation.
+     * 
+     * @param player ServerPlayerEntity to be kicked
+     * @param reason Reason for the kick.
+     */
+    private void kickPlayer(ServerPlayerEntity player, String reason) {
+        player.connection.disconnect(new StringTextComponent(reason));
     }
 
     /** Helper Methods ends */
