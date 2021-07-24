@@ -39,6 +39,8 @@ public class JLimitMod {
     private static int tick = 0;
     // Time in seconds to kick players
     private static long TIME_LIMIT = 60L; // 1 hour
+    // For the thread
+    private volatile boolean running = true;
 
     public JLimitMod() {
         // Register the events of this mod into the bus
@@ -59,7 +61,7 @@ public class JLimitMod {
             }
             // Create a new thread to run the logic and save the data periodically
             saveThread = new Thread(() -> {
-                while (true) {
+                while (running) {
                     // Add the millisecond that have passed since the last sleep
                     tick += sleepInterval;
 
@@ -94,6 +96,7 @@ public class JLimitMod {
     @SubscribeEvent
     public void onStopping(FMLServerStoppingEvent event) {
         try {
+            running = false;
             // Join the thread to halt it
             saveThread.join();
             // Save the info one last time to a flat file
